@@ -1,0 +1,129 @@
+version: '3.8'
+
+networks:
+  frontend-net:
+    driver: bridge
+  backend-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+
+services:
+  # --- 1. Database ---
+  db:
+    image: postgres:15-alpine
+    container_name: app_database
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: app_db
+    volumes:
+      - postgres_data:/var/data/postgres/data
+    networks:
+      - backend-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d app_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- 2. Backend ---
+  backend:
+    build: ./backend
+    container_name: app_backend
+    environment:
+      DB_HOST: db
+      DB_USER: myuser
+      DB_PASSWORD: mysecretpassword
+      DB_NAME: app_db
+    networks:
+      - frontend-net
+      - backend-net
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+    restart: on-failure:3
+    healthcheck:
+      #      test: ["CMD", "apk", "add", "--no-cache", "curl", "&&", "curl", "-f", "http://localhost:5000/api/health"]
+      # ملحوظة: لو الألبين مافهوش curl بنستخدم wget أو الطريقة القياسية لتوفير الـ curl
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:5000/api/health', (r) => { if (r.statusCode === 200) process.exit(0); else process.exit(1); })\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # --- 3. Frontend ---
+  frontend:
+    build: ./frontend
+    container_name: app_frontend
+    networks:
+      - frontend-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    restart: unless-stopped
+
+  # --- 4. Main Proxy ---
+  proxy:
+    image: nginx:alpine
+    container_name: app_proxy
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - frontend-net
+    depends_on:
+      - frontend
+      - backend
+    restart: always
+
+# --- 5. MONITORING STACK ---
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.0 # بيجمع داتا استهلاك الكونتينرز للريسورسز
+    container_name: cadvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - backend-net
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - backend-net
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000" # داشبورد المراقبة
+    networks:
+      - backend-net
+    restart: unless-stopped
