@@ -1,13 +1,35 @@
 const express = require('express');
+const fs = require('fs'); // إضافة مكتبة قراءة الملفات لدوكر سيكرتس
 const { Pool } = require('pg');
 
 const app = express();
 app.use(express.json());
 
+/**
+ * دالة مساعدة لقراءة كلمة المرور بأمان من الـ Docker Secrets.
+ * إذا وجد مسار للملف وقام بقراءته بنجاح سيعتمد عليه،
+ * وإلا سيعود لقراءة كلمة المرور العادية من متغيرات البيئة كخيار احتياطي.
+ */
+function readSecretPassword() {
+  const filePath = process.env.DB_PASSWORD_FILE;
+  
+  if (filePath) {
+    try {
+      if (fs.existsSync(filePath)) {
+        return fs.readFileSync(filePath, 'utf8').trim();
+      }
+    } catch (error) {
+      console.error(`[حماية] خطأ أثناء قراءة ملف كلمة المرور:`, error.message);
+    }
+  }
+  // خيار احتياطي في حال عدم استخدام الـ Secrets
+  return process.env.DB_PASSWORD; 
+}
+
 const pool = new Pool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
+  password: readSecretPassword(), // تم التعديل هنا لقراءة القيمة الآمنة المستخرجة
   database: process.env.DB_NAME,
   port: 5432,
 });
@@ -59,7 +81,7 @@ app.post('/api/students', async (req, res) => {
   try {
     const { name, age, address, phone, enrollment_date, tasks_dates } = req.body;
     const result = await pool.query(
-      `INSERT INTO students (name, age, address, phone, enrollment_date, tasks_dates) 
+      `INSERT INTO students (name, age, address, phone, enrollment_date, tasks_dates)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [name, age, address, phone, enrollment_date, JSON.stringify(tasks_dates || {})]
     );
@@ -75,8 +97,8 @@ app.put('/api/students/:id', async (req, res) => {
     const { id } = req.params;
     const { name, age, address, phone, enrollment_date, tasks_dates } = req.body;
     const result = await pool.query(
-      `UPDATE students 
-       SET name=$1, age=$2, address=$3, phone=$4, enrollment_date=$5, tasks_dates=$6 
+      `UPDATE students
+       SET name=$1, age=$2, address=$3, phone=$4, enrollment_date=$5, tasks_dates=$6
        WHERE id=$7 RETURNING *`,
       [name, age, address, phone, enrollment_date, JSON.stringify(tasks_dates || {}), id]
     );

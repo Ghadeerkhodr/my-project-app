@@ -16,8 +16,10 @@ services:
     container_name: app_database
     environment:
       POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_PASSWORD: /run/secrets/db_root_password
       POSTGRES_DB: app_db
+    secrets:
+       - db_root_password # تمنح الحاوية صلاحية الوصول لهذا الـ secret        
     volumes:
       - postgres_data:/var/data/postgres/data
     networks:
@@ -45,8 +47,10 @@ services:
     environment:
       DB_HOST: db
       DB_USER: myuser
-      DB_PASSWORD: mysecretpassword
+      DB_PASSWORD:  /run/secrets/db_root_password
       DB_NAME: app_db
+    secrets:
+      - db_root_password
     networks:
       - frontend-net
       - backend-net
@@ -127,3 +131,7 @@ services:
     networks:
       - backend-net
     restart: unless-stopped
+
+secrets:
+  db_root_password:
+    file: ./.secrets/db_password.txt
