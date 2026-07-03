@@ -2,66 +2,193 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>منظومة Docker المتكاملة</title>
+    <title>نظام إدارة الطلاب - Docker CRUD</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f4f6f9; }
-        .container { max-width: 600px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        input[type="text"] { width: 70%; padding: 10px; margin-left: 10px; }
-        button { padding: 10px 20px; background-color: #007bff; color: white; border: none; cursor: pointer; }
-        ul { list-style-type: none; padding: 0; }
-        li { padding: 10px; background: #eee; margin-top: 5px; border-radius: 4px; }
+        body { font-family: Arial, sans-serif; margin: 30px; background-color: #f4f7f6; }
+        .container { max-width: 1000px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); }
+        h2, h3 { color: #333; }
+        .form-group { margin-bottom: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+        input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; flex: 1; min-width: 150px; }
+        button { padding: 9px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-add { background-color: #28a745; color: white; }
+        .btn-update { background-color: #ffc107; color: #212529; display: none; }
+        .btn-cancel { background-color: #6c757d; color: white; display: none; }
+        .btn-edit { background-color: #007bff; color: white; padding: 4px 10px; margin-left: 5px;}
+        .btn-delete { background-color: #dc3545; color: white; padding: 4px 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; text-align: right; }
+        th, td { padding: 12px; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>لوحة تحكم المنظومة (Front-End)</h2>
-        <div style="margin-bottom: 20px;">
-            <input type="text" id="msgInput" placeholder="اكتب أي حاجة هنا لتبعتها للباك إند...">
-            <button onclick="sendData()">إرسال</button>
+        <h2>نظام إدارة الطلاب والتاسكات (لوحة CRUD)</h2>
+        
+        <div id="studentForm">
+            <input type="hidden" id="studentId">
+            <div class="form-group">
+                <input type="text" id="name" placeholder="اسم الطالب" required>
+                <input type="number" id="age" placeholder="العمر">
+                <input type="text" id="address" placeholder="مكان السكن">
+                <input type="text" id="phone" placeholder="رقم الهاتف">
+            </div>
+            <div class="form-group">
+                <label style="align-self: center;">تاريخ التسجيل:</label>
+                <input type="date" id="enrollmentDate">
+                <input type="text" id="task1Date" placeholder="تاريخ تقديم تاسك 1 (مثال: 2026-07-01)">
+                <input type="text" id="task2Date" placeholder="تاريخ تقديم تاسك 2">
+            </div>
+            <div class="form-group">
+                <button class="btn-add" id="addBtn" onclick="saveStudent()">إضافة طالب</button>
+                <button class="btn-update" id="updateBtn" onclick="saveStudent()">تحديث البيانات</button>
+                <button class="btn-cancel" id="cancelBtn" onclick="resetForm()">إلغاء</button>
+            </div>
         </div>
-        <h3>البيانات المسترجعة من الداتابيز:</h3>
-        <ul id="dataList"></ul>
+
+        <h3>قائمة الطلاب المسجلين</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>الاسم</th>
+                    <th>العمر</th>
+                    <th>السكن</th>
+                    <th>الهاتف</th>
+                    <th>تاريخ التسجيل</th>
+                    <th>مواعيد التاسكات</th>
+                    <th>الإجراءات</th>
+                </tr>
+            </thead>
+            <tbody id="studentsTableBody"></tbody>
+        </table>
     </div>
 
     <script>
-        // دالة لجلب البيانات وعرضها
-        async function loadData() {
+        const API_URL = '/api/students';
+
+        // 1. جلب البيانات وعرضها في الجدول
+        async function loadStudents() {
             try {
-                // بننادي /api/data والـ Nginx هيفهم يوديها للباك إند تلقائياً
-                const res = await fetch('/api/data');
-                const data = await res.json();
-                const list = document.getElementById('dataList');
-                list.innerHTML = '';
-                data.forEach(item => {
-                    const li = document.createElement('li');
-                    li.textContent = `${item.text} — (${new Date(item.created_at).toLocaleTimeString()})`;
-                    list.appendChild(li);
+                const res = await fetch(API_URL);
+                const students = await res.json();
+                const tbody = document.getElementById('studentsTableBody');
+                tbody.innerHTML = '';
+
+                students.forEach(s => {
+                    // تحويل JSON التابع للتاسكات إلى نص مقروء
+                    let tasksText = `تاسك1: ${s.tasks_dates.task1 || 'لم يقدم'} | تاسك2: ${s.tasks_dates.task2 || 'لم يقدم'}`;
+                    
+                    // تنسيق التاريخ ليكون مقروءاً
+                    let enrollDate = s.enrollment_date ? new Date(s.enrollment_date).toLocaleDateString('en-CA') : 'غير محدد';
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${s.id}</td>
+                        <td><b>${s.name}</b></td>
+                        <td>${s.age || '-'}</td>
+                        <td>${s.address || '-'}</td>
+                        <td>${s.phone || '-'}</td>
+                        <td>${enrollDate}</td>
+                        <td><small>${tasksText}</small></td>
+                        <td>
+                            <button class="btn-edit" onclick="editStudent(${JSON.stringify(s).replace(/"/g, '&quot;')})">تعديل</button>
+                            <button class="btn-delete" onclick="deleteStudent(${s.id})">حذف</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
                 });
             } catch (err) {
-                console.error("فشل جلب البيانات:", err);
+                console.error("خطأ في جلب البيانات:", err);
             }
         }
 
-        // دالة لإرسال بيانات جديدة
-        async function sendData() {
-            const input = document.getElementById('msgInput');
-            if(!input.value) return;
+        // 2. إضافة أو تحديث طالب
+        async function saveStudent() {
+            const id = document.getElementById('studentId').value;
+            const studentData = {
+                name: document.getElementById('name').value,
+                age: parseInt(document.getElementById('age').value) || null,
+                address: document.getElementById('address').value,
+                phone: document.getElementById('phone').value,
+                enrollment_date: document.getElementById('enrollmentDate').value || null,
+                tasks_dates: {
+                    task1: document.getElementById('task1Date').value,
+                    task2: document.getElementById('task2Date').value
+                }
+            };
+
+            if (!studentData.name) { alert("الاسم مطلوب!"); return; }
 
             try {
-                await fetch('/api/data', {
-                    method: 'POST',
+                let url = API_URL;
+                let method = 'POST';
+
+                if (id) { // إذا كان هناك ID إذن العملية تعديل
+                    url = `${API_URL}/${id}`;
+                    method = 'PUT';
+                }
+
+                const res = await fetch(url, {
+                    method: method,
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: input.value })
+                    body: JSON.stringify(studentData)
                 });
-                input.value = '';
-                loadData(); // إعادة تحميل القائمة
+
+                if(res.ok) {
+                    resetForm();
+                    loadStudents();
+                }
             } catch (err) {
-                console.error("فشل إرسال البيانات:", err);
+                console.error("خطأ أثناء الحفظ:", err);
             }
         }
 
-        // تحميل البيانات أول ما الصفحة تفتح
-        loadData();
+        // 3. وضع بيانات الطالب في الاستمارة للتعديل
+        function editStudent(student) {
+            document.getElementById('studentId').value = student.id;
+            document.getElementById('name').value = student.name;
+            document.getElementById('age').value = student.age || '';
+            document.getElementById('address').value = student.address || '';
+            document.getElementById('phone').value = student.phone || '';
+            document.getElementById('enrollmentDate').value = student.enrollment_date ? new Date(student.enrollment_date).toLocaleDateString('en-CA') : '';
+            document.getElementById('task1Date').value = student.tasks_dates.task1 || '';
+            document.getElementById('task2Date').value = student.tasks_dates.task2 || '';
+
+            // تبديل الأزرار لملائمة وضع التعديل
+            document.getElementById('addBtn').style.display = 'none';
+            document.getElementById('updateBtn').style.display = 'inline-block';
+            document.getElementById('cancelBtn').style.display = 'inline-block';
+        }
+
+        // 4. حذف طالب
+        async function deleteStudent(id) {
+            if (!confirm("هل أنت متأكد من حذف هذا الطالب نهائياً؟")) return;
+            try {
+                const res = await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+                if (res.ok) loadStudents();
+            } catch (err) {
+                console.error("خطأ أثناء الحذف:", err);
+            }
+        }
+
+        // إعادة ضبط الاستمارة
+        function resetForm() {
+            document.getElementById('studentId').value = '';
+            document.getElementById('name').value = '';
+            document.getElementById('age').value = '';
+            document.getElementById('address').value = '';
+            document.getElementById('phone').value = '';
+            document.getElementById('enrollmentDate').value = '';
+            document.getElementById('task1Date').value = '';
+            document.getElementById('task2Date').value = '';
+
+            document.getElementById('addBtn').style.display = 'inline-block';
+            document.getElementById('updateBtn').style.display = 'none';
+            document.getElementById('cancelBtn').style.display = 'none';
+        }
+
+        // تحميل القائمة عند فتح الصفحة
+        loadStudents();
     </script>
 </body>
 </html>
