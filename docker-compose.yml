@@ -101,17 +101,31 @@ services:
 
 # --- 5. MONITORING STACK ---
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.47.0 # بيجمع داتا استهلاك الكونتينرز للريسورسز
+    image: gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor
+    ports:
+      - "8080:8080"
+    networks:
+      - backend-net
+    restart: unless-stopped
+
+    # --- الإضافات الجوهرية لحل مشكلة cgroups v2 وظهور الحاويات ---
+    privileged: true # تمنح cAdvisor صلاحية كاملة لقراءة إحصائيات النظام
+    devices:
+      - /dev/kmsg # ضروري لـ cAdvisor لمراقبة استهلاك النواة
+    command:
+      - '-docker_only=false'
+      - '-housekeeping_interval=10s'
+      - '-storage_driver_buffer_duration=1m0s'
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
-    networks:
-      - backend-net
-    restart: unless-stopped
-
+      - /dev/disk/:/dev/disk:ro
+      # السطرين القادمين هما الحل السحري لتوزيعات لينكس الحديثة
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - /var/lib/docker/:/rootfs/var/lib/docker:ro
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
