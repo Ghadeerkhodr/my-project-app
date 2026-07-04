@@ -8,6 +8,7 @@ networks:
 
 volumes:
   postgres_data:
+  certbot-etc:
 
 services:
   # --- 1. Database ---
@@ -90,14 +91,29 @@ services:
     container_name: app_proxy
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      # مشاركة المجلدات مع Certbot لقراءة الشهادات والتحقق
+      - certbot-etc:/etc/letsencrypt:ro
     networks:
       - frontend-net
     depends_on:
       - frontend
       - backend
     restart: always
+
+
+# --- 4. Automate Certficate renwal ---
+  certbot:
+    image: certbot/dns-cloudflare:latest
+    container_name: certbot
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - ./certbot/cloudflare.ini:/etc/letsencrypt/cloudflare.ini:ro
+    # أمر دوري يفحص الشهادة كل 12 ساعة ويجددها تلقائياً إذا شارفت على الانتهاء
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"      
 
 # --- 5. MONITORING STACK ---
   cadvisor:
@@ -145,6 +161,7 @@ services:
     networks:
       - backend-net
     restart: unless-stopped
+
 
 secrets:
   db_root_password:
