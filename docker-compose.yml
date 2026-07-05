@@ -22,7 +22,7 @@ services:
     secrets:
        - db_root_password # تمنح الحاوية صلاحية الوصول لهذا الـ secret        
     volumes:
-      - postgres_data:/var/data/postgres/data
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - backend-net
     deploy:
