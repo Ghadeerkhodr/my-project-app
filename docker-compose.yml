@@ -9,6 +9,8 @@ networks:
 volumes:
   postgres_data:
   certbot-etc:
+  prometheus_data:
+  grafana_data:
 
 services:
   # --- 1. Database ---
@@ -149,6 +151,8 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+        # السطر الثاني يخزن البيانات التاريخية في الـ Volume الثابت لضمان عدم الحذف
+      - prometheus_data:/prometheus
     networks:
       - backend-net
     restart: unless-stopped
@@ -158,6 +162,9 @@ services:
     container_name: grafana
     ports:
       - "3000:3000" # داشبورد المراقبة
+    volumes:
+      # ربط الـ Volume الجديد بالمجلد الداخلي للجرافانا لحفظ الحسابات واللوحات
+      - grafana_data:/var/lib/grafana
     networks:
       - backend-net
     restart: unless-stopped
