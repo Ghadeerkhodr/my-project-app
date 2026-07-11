@@ -106,6 +106,19 @@ services:
       - backend
     restart: always
 
+  #Nginx Prometheus Exporter
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:latest
+    container_name: nginx_exporter
+    networks:
+      - frontend-net
+    command:
+      - --nginx.scrape-uri=http://proxy:8088/nginx_status
+    ports:
+      - "9113:9113"
+    depends_on:
+      - proxy
+
 
 # --- 4. Automate Certficate renwal ---
   certbot:
@@ -154,6 +167,7 @@ services:
         # السطر الثاني يخزن البيانات التاريخية في الـ Volume الثابت لضمان عدم الحذف
       - prometheus_data:/prometheus
     networks:
+      - frontend-net
       - backend-net
     restart: unless-stopped
 
