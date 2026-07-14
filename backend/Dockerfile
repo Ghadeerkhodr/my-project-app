@@ -16,3 +16,4 @@ EXPOSE 5000
 
 # الأمر النهائي لتشغيل السيرفر
 CMD ["node", "server.js"]
+#CMD ["sh", "-c", "node server.js > ./logs/app.log 2>&1"]

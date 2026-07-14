@@ -25,6 +25,13 @@ services:
        - db_root_password # تمنح الحاوية صلاحية الوصول لهذا الـ secret        
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./logs/postgres:/var/log/postgresql
+    command: >
+      postgres 
+      -c logging_collector=on 
+      -c log_directory=/var/log/postgresql 
+      -c log_filename=postgresql-%Y-%m-%d_%H%M%S.log
+      -c log_statement=all
     networks:
       - backend-net
     deploy:
@@ -54,6 +61,8 @@ services:
       DB_NAME: app_db
     secrets:
       - db_root_password
+    volumes:
+      - ./logs/backend:/usr/src/app/logs
     networks:
       - frontend-net
       - backend-net
@@ -97,14 +106,14 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      # مشاركة المجلدات مع Certbot لقراءة الشهادات والتحقق
       - certbot-etc:/etc/letsencrypt:ro
+      - ./logs/nginx:/var/log/nginx
     networks:
       - frontend-net
     depends_on:
       - frontend
       - backend
-    restart: always
+    restart: unless-stopped
 
   #Nginx Prometheus Exporter
   nginx-exporter:
@@ -127,7 +136,6 @@ services:
     volumes:
       - certbot-etc:/etc/letsencrypt
       - ./certbot/cloudflare.ini:/etc/letsencrypt/cloudflare.ini:ro
-    # أمر دوري يفحص الشهادة كل 12 ساعة ويجددها تلقائياً إذا شارفت على الانتهاء
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"      
 
 # --- 5. MONITORING STACK ---
@@ -140,7 +148,6 @@ services:
       - backend-net
     restart: unless-stopped
 
-    # --- الإضافات الجوهرية لحل مشكلة cgroups v2 وظهور الحاويات ---
     privileged: true # تمنح cAdvisor صلاحية كاملة لقراءة إحصائيات النظام
     devices:
       - /dev/kmsg # ضروري لـ cAdvisor لمراقبة استهلاك النواة
@@ -154,7 +161,6 @@ services:
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
-      # السطرين القادمين هما الحل السحري لتوزيعات لينكس الحديثة
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
       - /var/lib/docker/:/rootfs/var/lib/docker:ro
   prometheus:
@@ -164,7 +170,6 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-        # السطر الثاني يخزن البيانات التاريخية في الـ Volume الثابت لضمان عدم الحذف
       - prometheus_data:/prometheus
     networks:
       - frontend-net
@@ -175,9 +180,8 @@ services:
     image: grafana/grafana:latest
     container_name: grafana
     ports:
-      - "3000:3000" # داشبورد المراقبة
+      - "3000:3000"
     volumes:
-      # ربط الـ Volume الجديد بالمجلد الداخلي للجرافانا لحفظ الحسابات واللوحات
       - grafana_data:/var/lib/grafana
     networks:
       - backend-net
