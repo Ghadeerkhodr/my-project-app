@@ -1,6 +1,6 @@
 # DevOps Guided Project
 # 🚀 Enterprise Multi-Tier Web Architecture on Docker
-### Production-Ready Environment with Automation, Micro-Segmentation, High Availability, and Observability Stack.
+### Production-Ready Environment with Automation, Micro-Segmentation, and Observability Stack.
 
 ---
 
