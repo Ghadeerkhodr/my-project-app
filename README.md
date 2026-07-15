@@ -131,19 +131,32 @@ We implement distinct Docker restart policies based on the criticality and behav
 
 ### 4. Storage Sustainability (Log Drivers & Volumes)
 
-To combat **infinite log generation** which leads to unexpected disk capacity failures in production, we enforce strict log rotation and map all critical state to persistent volumes.
+To combat **infinite log generation** which leads to unexpected disk capacity failures in production:
 
-###$ 4.1 Logging Configuration
+- **Driver**: json-file with rigorous retention caps:
 
-We utilize the default `json-file` driver with rigorous retention caps defined globally via a YAML anchor:
+  - max-size: "10m" (Maximum singular file size)
 
-```yaml
-x-logging: &default-logging
-  driver: "json-file"
-  options:
-    max-size: "10m"   # Maximum singular file size before rotation
-    max-file: "3"     # Retain up to 3 old rolled files, purging older ones
-```
+  - max-file: "3" (Retain up to 3 old rolled files, purging older ones)
+
+- **Persistent Volumes**: postgres_data, prometheus_data, and grafana_data ensure that application states, historic logs, analytics metrics, and dashboard edits remain completely intact across full system tear-downs (docker compose down).
+
+### 💥 Chaos Engineering: Simulated Crashing & Observations:
+To validate the auto-healing core, we executed structural crash tests and registered Docker's behavior:
+
+#### Test Case A: Linux Kernel PID 1 Protection: 
+***Action Execution:*** ```docker exec -it app_backend kill -9 1``` <br>
+***Result Observation:*** The container remained completely unaffected. <br>
+***The Deep "Why":*** Linux kernel natively isolates Namespace processes. The application process running under PID 1 inside a container suppresses default unhandled SIGKILL signals originating internally to guard against unstable sub-process panics.
+
+#### Test Case B: Real Application Exception Crash:
+***Action Execution:*** Tracing child workers using ps aux and running a targeting kill ```(kill -9 <child_pid>)``` OR issuing a forced Out-Of-Memory stress strain via: <br>
+```docker exec -it app_backend sh -c "dd if=/dev/zero of=/dev/shm/fill_ram bs=1M count=300"``` <br>
+***Result Observation:*** Container status instantly fell to Exited (137). Within exactly 2.3 seconds, Docker engine flagged the on-failure specification, triggered a healthcheck cycle, and restored the container back into an active Up (healthy) state.
+
+
+
+
 
 ## Auther
 [Ghadeer.Alkhodr](www.linkedin.com/in/ghadeer-alkhodr)
